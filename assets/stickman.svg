@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- head -->
+  <circle cx="64" cy="24" r="12" fill="#f1c27d" stroke="#000" stroke-width="1.5"/>
+  <!-- hair (simple) -->
+  <path d="M56 18 q8 -8 16 0" fill="#000" />
+  <!-- torso (green shirt) -->
+  <rect x="50" y="36" width="28" height="28" rx="4" ry="4" fill="#28a745" stroke="#000" stroke-width="1.2" />
+  <!-- arms -->
+  <line x1="50" y1="44" x2="36" y2="60" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <line x1="78" y1="44" x2="92" y2="60" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <!-- legs -->
+  <line x1="58" y1="64" x2="52" y2="92" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <line x1="70" y1="64" x2="76" y2="92" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+  <!-- simple smile -->
+  <path d="M58 28 q6 6 12 0" stroke="#000" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+</svg>
