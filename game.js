@@ -44,6 +44,18 @@
     color: '#ff4d4d'
   };
 
+  // platforms (the rectangles you want to be solid)
+  // we'll create them as logical platforms with fixed world x and height relative to ground
+  const platforms = [];
+  (function buildPlatforms() {
+    // same positions as the decorative rectangles in render before: start at 200, spacing 140, width 100
+    for (let i = 0; i < 40; i++) {
+      const px = 200 + i * 140;
+      const ph = (i % 3 ? 20 : 60);
+      platforms.push({ x: px, w: 100, h: ph });
+    }
+  })();
+
   const gravity = 1700;
   const moveSpeed = 320;
   const jumpSpeed = -620;
@@ -134,17 +146,77 @@
       gameOverTimer -= dt;
       if (gameOverTimer <= 0) {
         initPositions();
-        gameOver = false;        // <-- reset the flag so we stop counting down
-        gameOverTimer = 0;      // clamp to zero to avoid negative display
+        gameOver = false;        // stop the game-over state
+        gameOverTimer = 0;      // clamp to zero
       }
       return;
     }
+
+    // save old position for platform collision checks
+    const oldY = player.y;
+    const oldBottom = player.y + player.h;
+
+    // horizontal control
     let ax = 0; if (keys.left) ax -= 1; if (keys.right) ax += 1; player.vx = ax * moveSpeed;
-    player.vy += gravity * dt; player.x += player.vx * dt; player.y += player.vy * dt;
-    const gY = groundY(); if (player.y + player.h > gY) { player.y = gY - player.h; player.vy = 0; player.onGround = true; }
-    if (checkSpikeCollision()) { gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return; }
-    if (player.x < 20) player.x = 20; if (player.x > 5000) player.x = 5000;
-    const canvasW = canvas.width / DPR; camX = player.x - canvasW/2; if (camX < 0) camX = 0;
+
+    // gravity and integrate
+    player.vy += gravity * dt;
+    player.x += player.vx * dt;
+    player.y += player.vy * dt;
+
+    const gY = groundY();
+
+    // platform collision: only if falling (player.vy > 0)
+    let landed = false;
+    if (player.vy > 0) {
+      for (let p of platforms) {
+        const pTop = gY - p.h;
+        const pLeft = p.x - p.w/2;
+        const pRight = p.x + p.w/2;
+        const newBottom = player.y + player.h;
+        // horizontal overlap
+        if (player.x + player.w/2 > pLeft && player.x - player.w/2 < pRight) {
+          // crossed downward through the platform top this frame?
+          if (oldBottom <= pTop && newBottom > pTop) {
+            // land on platform
+            player.y = pTop - player.h;
+            player.vy = 0;
+            player.onGround = true;
+            landed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // ground collision if not landed on a platform
+    if (!landed) {
+      if (player.y + player.h > gY) {
+        player.y = gY - player.h;
+        player.vy = 0;
+        player.onGround = true;
+      } else {
+        player.onGround = false;
+      }
+    }
+
+    // spike collision -> trigger game over
+    if (checkSpikeCollision()) {
+      gameOver = true;
+      gameOverTimer = 5.0; // seconds of game over
+      player.vx = 0;
+      player.vy = 0;
+      return;
+    }
+
+    // keep player in bounds horizontally
+    if (player.x < 20) player.x = 20;
+    if (player.x > 5000) player.x = 5000; // big level width
+
+    // camera follows player
+    const canvasW = canvas.width / DPR;
+    camX = player.x - canvasW / 2;
+    if (camX < 0) camX = 0;
   }
 
   function drawStickman(x, y) {
@@ -221,10 +293,13 @@
     ctx.fillStyle = '#2b2b3f';
     ctx.fillRect(0, gY, 6000, h - gY);
 
-    // decorative rectangles
-    for (let i = 0; i < 40; i++) {
+    // decorative rectangles & platforms
+    for (let i = 0; i < platforms.length; i++) {
+      const p = platforms[i];
+      const px = p.x - p.w/2;
+      const py = gY - p.h;
       ctx.fillStyle = i % 2 ? '#47506a' : '#3b3f58';
-      ctx.fillRect(200 + i*140, gY - (i%3?20:60), 100, (i%3?20:60));
+      ctx.fillRect(px, py, p.w, p.h);
     }
 
     // spike
