@@ -2,16 +2,36 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>Stickman demo — arrow keys to move & jump</title>
   <style>
-    html,body { height:100%; margin:0; display:flex; align-items:center; justify-content:center; background:#e9eef2; }
-    canvas { background: linear-gradient(#87ceeb, #cde9ff); border:1px solid #666; }
+    html,body { height:100%; margin:0; display:flex; align-items:center; justify-content:center; background:#e9eef2; -webkit-touch-callout:none; -webkit-user-select:none; -ms-touch-action:none; touch-action:none; }
+    canvas { background: linear-gradient(#87ceeb, #cde9ff); border:1px solid #666; display:block; }
     .info { position: absolute; top: 12px; left: 12px; font-family: sans-serif; color:#222; }
+
+    /* On-screen controls for touch devices */
+    .controls { position: fixed; left:0; right:0; bottom:14px; pointer-events:none; display:flex; justify-content:space-between; align-items:center; padding:0 18px; box-sizing:border-box; }
+    .btn { pointer-events:auto; user-select:none; -webkit-user-select:none; background: rgba(0,0,0,0.25); color: #fff; width:84px; height:84px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:700; box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
+    .btn.small { width:64px; height:64px; font-size:32px; }
+    .btn:active { transform: translateY(2px); }
+    .center { display:flex; gap:12px; align-items:center; }
+
+    /* hide on wide screens (desktop) but keep if user wants) */
+    @media(min-width:900px){ .controls { display:none; } }
   </style>
 </head>
 <body>
-  <div class="info">Use ← → to move, ↑ to jump (or Space)</div>
+  <div class="info">Use ← → to move, ↑ to jump (or Space). On touch: arrows to move, tap Jump.</div>
   <canvas id="c" width="900" height="420"></canvas>
+
+  <!-- touch controls -->
+  <div class="controls" aria-hidden="false">
+    <div class="center">
+      <div id="leftBtn" class="btn" role="button" aria-label="left">◀</div>
+      <div id="rightBtn" class="btn" role="button" aria-label="right">▶</div>
+    </div>
+    <div id="jumpBtn" class="btn small" role="button" aria-label="jump">▲</div>
+  </div>
 
 <script>
 const canvas = document.getElementById('c');
@@ -54,6 +74,42 @@ window.addEventListener('keyup', e => {
   if (e.key === 'ArrowLeft') keys.left = false;
   if (e.key === 'ArrowRight') keys.right = false;
   if (e.key === 'ArrowUp' || e.code === 'Space') keys.up = false;
+});
+
+// pointer / touch helpers for on-screen buttons
+function bindButton(elem, downHandler, upHandler) {
+  if (!elem) return;
+  // Pointer events (works for mouse + touch + pen)
+  elem.addEventListener('pointerdown', e => { e.preventDefault(); elem.setPointerCapture(e.pointerId); downHandler(e); });
+  elem.addEventListener('pointerup', e => { e.preventDefault(); try{ elem.releasePointerCapture(e.pointerId); } catch(e){} upHandler(e); });
+  elem.addEventListener('pointercancel', e => { e.preventDefault(); upHandler(e); });
+
+  // Also handle mouseleave (in case user drags finger off)
+  elem.addEventListener('pointerleave', e => { /* do nothing */ });
+}
+
+// on-screen buttons
+const leftBtn = document.getElementById('leftBtn');
+const rightBtn = document.getElementById('rightBtn');
+const jumpBtn = document.getElementById('jumpBtn');
+
+bindButton(leftBtn, () => { keys.left = true; }, () => { keys.left = false; });
+bindButton(rightBtn, () => { keys.right = true; }, () => { keys.right = false; });
+bindButton(jumpBtn, () => { keys.up = true; }, () => { keys.up = false; });
+
+// Allow tapping the canvas to jump as well (quick tap)
+let touchJumpTimeout = null;
+canvas.addEventListener('pointerdown', e => {
+  // ignore if pointer is over a control button
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (el && (el === leftBtn || el === rightBtn || el === jumpBtn)) return;
+
+  // single tap => jump
+  e.preventDefault();
+  keys.up = true;
+  // ensure key released shortly after so it registers as a tap
+  clearTimeout(touchJumpTimeout);
+  touchJumpTimeout = setTimeout(() => { keys.up = false; }, 120);
 });
 
 // simple loop
