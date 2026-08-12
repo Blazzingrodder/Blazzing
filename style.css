@@ -9,18 +9,21 @@ html,body{height:100%;margin:0;background:#1e1e2f;color:#fff;font-family:system-
 #game-wrap{position:relative;height:100vh;overflow:hidden}
 canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#0066cc)}
 /* bottom control area spans full width so buttons can be positioned independently */
-#touch-controls{position:absolute;left:0;right:0;bottom:0;height:120px;pointer-events:none}
-.ctl{width:var(--btn-size);height:var(--btn-size);border-radius:50%;border:none;background:var(--btn-bg);color:var(--btn-color);font-size:34px;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;touch-action:none;pointer-events:auto}
+#touch-controls{position:absolute;left:0;right:0;bottom:0;height:160px;pointer-events:none}
+.ctl{width:var(--btn-size);height:var(--btn-size);border-radius:50%;border:none;background:var(--btn-bg);color:var(--btn-color);font-size:34px;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;touch-action:none;pointer-events:auto;z-index:40}
 .ctl:active{transform:scale(0.96);}
 /* left button sits at bottom-left */
 #leftBtn{position:absolute;left:12px;bottom:12px}
-/* right movement button is placed to the left of the jump button using a calc so they're never attached */
-#rightBtn{position:absolute;right:calc(12px + var(--btn-size) + 24px);bottom:12px}
+/* right movement button: explicitly placed toward the right but with a larger gap from the jump button */
+#rightBtn{position:absolute;right:220px;bottom:12px}
 /* jump button (▲) sits at the far right edge */
 .jump{position:absolute;right:12px;bottom:12px}
 #info{position:absolute;left:50%;transform:translateX(-50%);top:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:8px;font-size:14px}
 
-/* on very narrow screens, reduce the gap so buttons fit */
+/* on smaller screens reduce gap but keep them separated */
+@media (max-width:600px){
+  #rightBtn{right:180px}
+}
 @media (max-width:420px){
-  #rightBtn{right:calc(12px + var(--btn-size) + 8px)}
+  #rightBtn{right:140px}
 }
