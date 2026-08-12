@@ -9,7 +9,7 @@ html,body{height:100%;margin:0;background:#1e1e2f;color:#fff;font-family:system-
 #game-wrap{position:relative;height:100vh;overflow:hidden}
 canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#0066cc)}
 /* control area spans full width so buttons can be placed freely */
-#touch-controls{position:absolute;left:0;right:0;bottom:0;height:160px;pointer-events:none}
+#touch-controls{position:absolute;left:0;right:0;bottom:0;height:220px;pointer-events:none}
 
 /* common button styles */
 .ctl{
@@ -26,22 +26,29 @@ canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#
   justify-content:center;
   touch-action:none;
   pointer-events:auto;
-  z-index:40;
+  z-index:80;
 }
 .ctl:active{transform:scale(0.96);}
 
-/* left button at bottom-left */
-#leftBtn{position:absolute;left:12px;bottom:12px}
+/* left & right movement buttons placed close together near the bottom-left area */
+#leftBtn{position:absolute;left:24px;bottom:12px}
+#rightBtn{position:absolute;left:120px;bottom:12px}
 
-/* right movement button: place it near center (so it's visibly separate from the jump button on the right edge) */
-#rightBtn{position:absolute;left:calc(50% - 42px);bottom:12px}
-
-/* jump button (▲) fixed at far right edge */
-.jump{position:absolute;right:12px;bottom:12px}
+/* jump button sits above the two movement buttons (centered between them) */
+#jumpBtn{position:absolute;left:72px;bottom:calc(12px + var(--btn-size) + 12px)}
 
 #info{position:absolute;left:50%;transform:translateX(-50%);top:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:8px;font-size:14px}
 
-/* responsive fallbacks so buttons fit on narrow screens */
-@media (max-width:900px){ #rightBtn{left:calc(50% - 64px);} }
-@media (max-width:700px){ #rightBtn{left:calc(50% - 80px);} }
-@media (max-width:480px){ #rightBtn{left:calc(50% - 92px);} }
+/* responsive adjustments for narrower screens */
+@media (max-width:700px){
+  #leftBtn{left:16px}
+  #rightBtn{left:110px}
+  #jumpBtn{left:64px}
+}
+@media (max-width:420px){
+  /* when space is tight, stack buttons slightly tighter */
+  #leftBtn{left:12px}
+  #rightBtn{left:108px}
+  #jumpBtn{left:60px}
+  #touch-controls{height:200px}
+}
