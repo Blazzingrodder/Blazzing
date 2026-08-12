@@ -8,9 +8,19 @@
 html,body{height:100%;margin:0;background:#1e1e2f;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
 #game-wrap{position:relative;height:100vh;overflow:hidden}
 canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#0066cc)}
-#touch-controls{position:absolute;left:12px;bottom:12px;display:flex;gap:var(--btn-gap);align-items:center}
-.ctl{width:var(--btn-size);height:var(--btn-size);border-radius:50%;border:none;background:var(--btn-bg);color:var(--btn-color);font-size:34px;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;touch-action:none}
+/* bottom control area spans full width so buttons can be positioned independently */
+#touch-controls{position:absolute;left:0;right:0;bottom:0;height:120px;pointer-events:none}
+.ctl{width:var(--btn-size);height:var(--btn-size);border-radius:50%;border:none;background:var(--btn-bg);color:var(--btn-color);font-size:34px;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;touch-action:none;pointer-events:auto}
 .ctl:active{transform:scale(0.96);}
+/* left button sits at bottom-left */
+#leftBtn{position:absolute;left:12px;bottom:12px}
+/* right movement button is forced to the right edge area for easy reach on tablets */
+#rightBtn{position:absolute;right:140px;bottom:12px}
+/* jump button (▲) sits at the far right edge */
 .jump{position:absolute;right:12px;bottom:12px}
-#rightBtn{margin-left:120px} /* move the right button further to the right for easier iPad reach */
 #info{position:absolute;left:50%;transform:translateX(-50%);top:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:8px;font-size:14px}
+
+/* on very narrow screens, push the right button a bit inward to avoid overlap */
+@media (max-width:420px){
+  #rightBtn{right:180px}
+}

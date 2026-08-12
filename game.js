@@ -35,11 +35,11 @@
     onGround: false
   };
 
-  // spike (obstacle)
+  // spike (obstacle) - bigger and closer to start
   const spike = {
-    x: 600, // place spike across level
-    w: 140,
-    h: 56,
+    x: 300, // closer to start so it's visible quickly
+    w: 200, // wider
+    h: 90,  // taller
     color: '#ff4d4d'
   };
 
@@ -194,10 +194,10 @@
   function render() {
     const w = canvas.width / DPR;
     const h = canvas.height / DPR;
-    // sky background already set by CSS but clear anyway
+    // clear
     ctx.clearRect(0,0,w,h);
 
-    // draw background
+    // background
     ctx.fillStyle = '#7ec8ff';
     ctx.fillRect(0,0,w,h);
 
@@ -242,7 +242,7 @@
 
     // HUD - show controls hints
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(8,8,260,36);
+    ctx.fillRect(8,8,320,36);
     ctx.fillStyle = '#fff';
     ctx.font = '14px system-ui, -apple-system';
     ctx.fillText('← / → or touch • Up arrow to jump', 14, 32);
