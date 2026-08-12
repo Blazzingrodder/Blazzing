@@ -12,4 +12,5 @@ canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#
 .ctl{width:var(--btn-size);height:var(--btn-size);border-radius:50%;border:none;background:var(--btn-bg);color:var(--btn-color);font-size:34px;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;touch-action:none}
 .ctl:active{transform:scale(0.96);}
 .jump{position:absolute;right:12px;bottom:12px}
+#rightBtn{margin-left:120px} /* move the right button further to the right for easier iPad reach */
 #info{position:absolute;left:50%;transform:translateX(-50%);top:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:8px;font-size:14px}
