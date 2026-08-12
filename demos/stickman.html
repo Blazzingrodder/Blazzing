@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Stickman demo — arrow keys to move & jump</title>
+  <style>
+    html,body { height:100%; margin:0; display:flex; align-items:center; justify-content:center; background:#e9eef2; }
+    canvas { background: linear-gradient(#87ceeb, #cde9ff); border:1px solid #666; }
+    .info { position: absolute; top: 12px; left: 12px; font-family: sans-serif; color:#222; }
+  </style>
+</head>
+<body>
+  <div class="info">Use ← → to move, ↑ to jump (or Space)</div>
+  <canvas id="c" width="900" height="420"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const SPRITE_SRC = 'assets/stickman.svg'; // adjust path if necessary
+
+// world / player
+const groundY = 360;
+const player = {
+  x: 140,
+  y: groundY - 80,   // top-left y of sprite
+  vx: 0,
+  vy: 0,
+  w: 64,
+  h: 64,
+  speed: 0.45,       // acceleration
+  maxSpeed: 4.0,
+  friction: 0.85,
+  gravity: 0.9,
+  jumpImpulse: -16,
+  onGround: false,
+  facing: 1, // 1 = right, -1 = left
+};
+
+const keys = { left:false, right:false, up:false };
+
+let spriteImage = new Image();
+let spriteLoaded = false;
+spriteImage.onload = () => { spriteLoaded = true; };
+spriteImage.src = SPRITE_SRC;
+
+// keyboard
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') keys.left = true;
+  if (e.key === 'ArrowRight') keys.right = true;
+  if (e.key === 'ArrowUp' || e.code === 'Space') keys.up = true;
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft') keys.left = false;
+  if (e.key === 'ArrowRight') keys.right = false;
+  if (e.key === 'ArrowUp' || e.code === 'Space') keys.up = false;
+});
+
+// simple loop
+function update(dt) {
+  // horizontal input
+  if (keys.left) {
+    player.vx -= player.speed * dt;
+    player.facing = -1;
+  }
+  if (keys.right) {
+    player.vx += player.speed * dt;
+    player.facing = 1;
+  }
+
+  // clamp horizontal speed
+  if (player.vx > player.maxSpeed) player.vx = player.maxSpeed;
+  if (player.vx < -player.maxSpeed) player.vx = -player.maxSpeed;
+
+  // apply gravity
+  player.vy += player.gravity * dt;
+
+  // apply velocity to position
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+
+  // ground collision
+  if (player.y + player.h > groundY) {
+    player.y = groundY - player.h;
+    player.vy = 0;
+    player.onGround = true;
+  } else {
+    player.onGround = false;
+  }
+
+  // jump (only when on ground and up pressed)
+  if (keys.up && player.onGround) {
+    player.vy = player.jumpImpulse;
+    player.onGround = false;
+  }
+
+  // friction when on ground and no input
+  if (!keys.left && !keys.right) {
+    player.vx *= player.friction;
+    if (Math.abs(player.vx) < 0.01) player.vx = 0;
+  }
+
+  // simple bounds
+  if (player.x < 10) { player.x = 10; player.vx = 0; }
+  if (player.x + player.w > canvas.width - 10) { player.x = canvas.width - 10 - player.w; player.vx = 0; }
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // draw ground
+  ctx.fillStyle = '#5aa84a';
+  ctx.fillRect(0, groundY, canvas.width, canvas.height-groundY);
+
+  // draw platform line
+  ctx.strokeStyle = '#3b6c2b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(canvas.width, groundY);
+  ctx.stroke();
+
+  // draw player (sprite). We'll scale to player.w/player.h
+  if (spriteLoaded) {
+    ctx.save();
+    // mirror if facing left
+    if (player.facing === -1) {
+      ctx.translate(player.x + player.w/2, player.y + player.h/2);
+      ctx.scale(-1,1);
+      ctx.drawImage(spriteImage, -player.w/2, -player.h/2, player.w, player.h);
+    } else {
+      ctx.drawImage(spriteImage, player.x, player.y, player.w, player.h);
+    }
+    ctx.restore();
+  } else {
+    // fallback rectangle while sprite loads
+    ctx.fillStyle = '#28a745';
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(player.x, player.y, player.w, player.h);
+  }
+}
+
+// timing
+let last = performance.now();
+function loop(t) {
+  const dt = Math.min((t - last) / (1000/60), 2); // scale to 60fps units
+  last = t;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
