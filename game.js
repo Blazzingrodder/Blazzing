@@ -23,15 +23,16 @@
   // player start
   const start = { x: 120, y: null };
 
-  // player
+  // player (we keep w/h for collision but draw a stickman)
   const player = {
     x: start.x,
     y: 0,
     w: 36,
-    h: 36,
+    h: 48, // taller to fit stickman torso
     vx: 0,
     vy: 0,
-    color: '#ffdd57',
+    color: '#2ecc71', // shirt color (green)
+    skin: '#ffd9b3',
     onGround: false
   };
 
@@ -51,7 +52,7 @@
   let gameOver = false, gameOverTimer = 0;
 
   function initPositions() {
-    start.y = groundY() - 40;
+    start.y = groundY() - player.h;
     player.x = start.x;
     player.y = start.y;
     player.vx = 0;
@@ -100,20 +101,35 @@
     requestAnimationFrame(loop);
   }
 
+  // triangle-aware collision test: sample across player's width and compare feet to spike triangular surface
   function checkSpikeCollision() {
     const gY = groundY();
-    const spikeTop = gY - spike.h;
-    const playerLeft = player.x - player.w/2;
-    const playerRight = player.x + player.w/2;
     const spikeLeft = spike.x - spike.w/2;
     const spikeRight = spike.x + spike.w/2;
+    const playerLeft = player.x - player.w/2;
+    const playerRight = player.x + player.w/2;
     const playerBottom = player.y + player.h;
-    if (playerRight > spikeLeft && playerLeft < spikeRight && playerBottom > spikeTop) return true;
+
+    // quick reject if no horizontal overlap at all
+    if (playerRight < spikeLeft || playerLeft > spikeRight) return false;
+
+    const half = spike.w / 2;
+    // sample three X positions across player's width (left, center, right)
+    const sampleXs = [playerLeft, player.x, playerRight];
+    for (let sx of sampleXs) {
+      if (sx < spikeLeft || sx > spikeRight) continue;
+      const dx = Math.abs(sx - spike.x);
+      // linear triangular profile: height decreases linearly from center to edges
+      const localHeight = spike.h * Math.max(0, 1 - (dx / half));
+      const spikeSurfaceY = gY - localHeight;
+      // collision only if player's feet go below the triangular surface at this x
+      if (playerBottom > spikeSurfaceY) return true;
+    }
     return false;
   }
 
   function update(dt) {
-    start.y = groundY() - 40;
+    start.y = groundY() - player.h;
     if (gameOver) {
       gameOverTimer -= dt;
       if (gameOverTimer <= 0) initPositions();
@@ -127,16 +143,132 @@
     const canvasW = canvas.width / DPR; camX = player.x - canvasW/2; if (camX < 0) camX = 0;
   }
 
+  function drawStickman(x, y) {
+    // x is center x, y is top of torso
+    const cx = x;
+    const top = y;
+    const bodyWidth = player.w; // 36
+    const bodyHeight = player.h - 8; // leave a little space for head
+    const headR = Math.min(12, bodyWidth/2);
+    const headCX = cx;
+    const headCY = top - headR;
+
+    const torsoTop = top;
+    const torsoBottom = top + bodyHeight;
+    const shoulderY = torsoTop + 6;
+    const waistY = torsoTop + Math.round(bodyHeight * 0.5);
+
+    // head
+    ctx.fillStyle = player.skin;
+    ctx.beginPath();
+    ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // shirt
+    ctx.fillStyle = player.color;
+    ctx.fillRect(cx - bodyWidth/2, torsoTop, bodyWidth, Math.round(bodyHeight * 0.5));
+
+    // pants
+    ctx.fillStyle = '#44475a';
+    ctx.fillRect(cx - bodyWidth/2, torsoTop + Math.round(bodyHeight * 0.5), bodyWidth, Math.round(bodyHeight * 0.5));
+
+    // arms
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - bodyWidth/2 + 4, shoulderY);
+    ctx.lineTo(cx - bodyWidth/2 - 14, shoulderY + 18);
+    ctx.moveTo(cx + bodyWidth/2 - 4, shoulderY);
+    ctx.lineTo(cx + bodyWidth/2 + 14, shoulderY + 18);
+    ctx.stroke();
+
+    // legs
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, waistY);
+    ctx.lineTo(cx - 12, torsoBottom + 20);
+    ctx.moveTo(cx + 8, waistY);
+    ctx.lineTo(cx + 12, torsoBottom + 20);
+    ctx.stroke();
+
+    // eyes
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(headCX - 4, headCY - 2, 1.6, 0, Math.PI * 2);
+    ctx.arc(headCX + 4, headCY - 2, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   function render() {
-    const w = canvas.width / DPR; const h = canvas.height / DPR; ctx.clearRect(0,0,w,h);
-    const gY = groundY(); ctx.save(); ctx.translate(-camX,0);
-    ctx.fillStyle = '#2b2b3f'; ctx.fillRect(0, gY, 6000, h - gY);
-    for (let i=0;i<40;i++){ ctx.fillStyle = i%2 ? '#47506a' : '#3b3f58'; ctx.fillRect(200 + i*140, gY - (i%3?20:60), 100, (i%3?20:60)); }
-    ctx.fillStyle = spike.color; const sx = spike.x, sw = spike.w, sh = spike.h; ctx.beginPath(); ctx.moveTo(sx - sw/2, gY); ctx.lineTo(sx, gY - sh); ctx.lineTo(sx + sw/2, gY); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = player.color; ctx.fillRect(player.x - player.w/2, player.y, player.w, player.h);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(player.x, gY + 6, player.w, 6, 0, 0, Math.PI*2); ctx.fill();
-    ctx.restore(); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,340,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up arrow to jump', 14, 32);
-    if (gameOver) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,w,h); ctx.fillStyle = '#ffdddd'; ctx.font = '48px system-ui, -apple-system'; ctx.textAlign='center'; ctx.fillText('GAME OVER', w/2, h/2 - 10); ctx.font = '20px system-ui, -apple-system'; ctx.fillStyle = '#fff'; const sec = Math.ceil(gameOverTimer); ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30); ctx.textAlign='start'; }
+    const w = canvas.width / DPR;
+    const h = canvas.height / DPR;
+    ctx.clearRect(0,0,w,h);
+
+    // background
+    ctx.fillStyle = '#7ec8ff';
+    ctx.fillRect(0,0,w,h);
+
+    // draw level translated by camera
+    const gY = groundY();
+    ctx.save();
+    ctx.translate(-camX,0);
+
+    // ground
+    ctx.fillStyle = '#2b2b3f';
+    ctx.fillRect(0, gY, 6000, h - gY);
+
+    // decorative rectangles
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = i % 2 ? '#47506a' : '#3b3f58';
+      ctx.fillRect(200 + i*140, gY - (i%3?20:60), 100, (i%3?20:60));
+    }
+
+    // spike
+    ctx.fillStyle = spike.color;
+    const sx = spike.x;
+    const sw = spike.w;
+    const sh = spike.h;
+    ctx.beginPath();
+    ctx.moveTo(sx - sw/2, gY);
+    ctx.lineTo(sx, gY - sh);
+    ctx.lineTo(sx + sw/2, gY);
+    ctx.closePath();
+    ctx.fill();
+
+    // player as stickman
+    const px = player.x;
+    const py = player.y;
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(px, gY + 6, player.w, 6, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    drawStickman(px, py);
+
+    ctx.restore();
+
+    // HUD
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(8,8,340,36);
+    ctx.fillStyle = '#fff';
+    ctx.font = '14px system-ui, -apple-system';
+    ctx.fillText('← / → or touch • Up arrow to jump', 14, 32);
+
+    // Game Over overlay
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = '#ffdddd';
+      ctx.font = '48px system-ui, -apple-system';
+      ctx.textAlign = 'center';
+      ctx.fillText('GAME OVER', w/2, h/2 - 10);
+      ctx.font = '20px system-ui, -apple-system';
+      ctx.fillStyle = '#fff';
+      const sec = Math.ceil(gameOverTimer);
+      ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30);
+      ctx.textAlign = 'start';
+    }
   }
 
   requestAnimationFrame(loop);
