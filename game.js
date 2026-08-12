@@ -132,7 +132,11 @@
     start.y = groundY() - player.h;
     if (gameOver) {
       gameOverTimer -= dt;
-      if (gameOverTimer <= 0) initPositions();
+      if (gameOverTimer <= 0) {
+        initPositions();
+        gameOver = false;        // <-- reset the flag so we stop counting down
+        gameOverTimer = 0;      // clamp to zero to avoid negative display
+      }
       return;
     }
     let ax = 0; if (keys.left) ax -= 1; if (keys.right) ax += 1; player.vx = ax * moveSpeed;
@@ -265,7 +269,7 @@
       ctx.fillText('GAME OVER', w/2, h/2 - 10);
       ctx.font = '20px system-ui, -apple-system';
       ctx.fillStyle = '#fff';
-      const sec = Math.ceil(gameOverTimer);
+      const sec = Math.max(0, Math.ceil(gameOverTimer));
       ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30);
       ctx.textAlign = 'start';
     }
