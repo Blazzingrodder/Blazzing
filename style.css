@@ -9,7 +9,7 @@ html,body{height:100%;margin:0;background:#1e1e2f;color:#fff;font-family:system-
 #game-wrap{position:relative;height:100vh;overflow:hidden}
 canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#0066cc)}
 /* control area spans full width so buttons can be placed freely */
-#touch-controls{position:absolute;left:0;right:0;bottom:0;height:220px;pointer-events:none}
+#touch-controls{position:absolute;left:0;right:0;bottom:0;height:240px;pointer-events:none}
 
 /* common button styles */
 .ctl{
@@ -26,29 +26,29 @@ canvas{display:block;width:100%;height:100%;background:linear-gradient(#6ec6ff,#
   justify-content:center;
   touch-action:none;
   pointer-events:auto;
-  z-index:80;
+  z-index:100;
 }
 .ctl:active{transform:scale(0.96);}
 
 /* left & right movement buttons placed close together near the bottom-left area */
-#leftBtn{position:absolute;left:24px;bottom:12px}
-#rightBtn{position:absolute;left:120px;bottom:12px}
+#leftBtn{position:absolute;left:20px;bottom:20px}
+#rightBtn{position:absolute;left:120px;bottom:20px}
 
-/* jump button sits above the two movement buttons (centered between them) */
-#jumpBtn{position:absolute;left:72px;bottom:calc(12px + var(--btn-size) + 12px)}
+/* jump button moved to the bottom-right where you circled it */
+#jumpBtn{position:absolute;right:24px;bottom:24px}
+
+/* make sure nothing overlaps the jump button */
+#touch-controls .ctl{box-shadow: 0 6px 20px rgba(0,0,0,0.35)}
 
 #info{position:absolute;left:50%;transform:translateX(-50%);top:12px;background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:8px;font-size:14px}
 
-/* responsive adjustments for narrower screens */
+/* responsive adjustments: tighten spacing on smaller screens while keeping jump at bottom-right */
 @media (max-width:700px){
   #leftBtn{left:16px}
-  #rightBtn{left:110px}
-  #jumpBtn{left:64px}
+  #rightBtn{left:108px}
 }
 @media (max-width:420px){
-  /* when space is tight, stack buttons slightly tighter */
   #leftBtn{left:12px}
-  #rightBtn{left:108px}
-  #jumpBtn{left:60px}
-  #touch-controls{height:200px}
+  #rightBtn{left:100px}
+  #touch-controls{height:220px}
 }
