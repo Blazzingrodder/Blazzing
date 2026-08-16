@@ -45,10 +45,8 @@
   };
 
   // platforms (the rectangles you want to be solid)
-  // we'll create them as logical platforms with fixed world x and height relative to ground
   const platforms = [];
   (function buildPlatforms() {
-    // same positions as the decorative rectangles in render before: start at 200, spacing 140, width 100
     for (let i = 0; i < 40; i++) {
       const px = 200 + i * 140;
       const ph = (i % 3 ? 20 : 60);
@@ -78,7 +76,11 @@
     if (gameOver) return;
     if (e.key === 'ArrowLeft') keys.left = true;
     if (e.key === 'ArrowRight') keys.right = true;
-    if (e.key === 'ArrowUp') { if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } e.preventDefault(); }
+    // support Up arrow AND Space for jump (Spacebar keycode: 'Space' or key === ' ')
+    if (e.key === 'ArrowUp' || e.code === 'Space' || e.key === ' ') {
+      if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; }
+      e.preventDefault();
+    }
   });
   window.addEventListener('keyup', e => { if (e.key === 'ArrowLeft') keys.left = false; if (e.key === 'ArrowRight') keys.right = false; });
 
@@ -86,21 +88,52 @@
   function setupBtn(id, action) {
     const el = document.getElementById(id);
     if (!el) return;
-    const down = (ev) => { ev.preventDefault(); if (gameOver) return; action(true); };
-    const up = (ev) => { ev.preventDefault(); action(false); };
-    el.addEventListener('pointerdown', down);
-    window.addEventListener('pointerup', up);
-    el.addEventListener('touchstart', down, {passive:false});
-    window.addEventListener('touchend', up);
-    el.addEventListener('pointercancel', up);
-    el.addEventListener('touchcancel', up);
+
+    // Use Pointer Events with pointer capture so holding one control isn't cancelled when touching another
+    el.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      if (gameOver) return;
+      try { el.setPointerCapture(ev.pointerId); } catch (e) {}
+      action(true);
+      el.dataset.down = '1';
+    });
+
+    el.addEventListener('pointerup', (ev) => {
+      ev.preventDefault();
+      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+      action(false);
+      el.dataset.down = '0';
+    });
+
+    el.addEventListener('pointercancel', (ev) => {
+      ev.preventDefault();
+      action(false);
+      el.dataset.down = '0';
+    });
+
+    // touch fallbacks for older browsers (kept for compatibility)
+    el.addEventListener('touchstart', (ev) => { ev.preventDefault(); if (gameOver) return; action(true); el.dataset.down = '1'; }, {passive:false});
+    el.addEventListener('touchend', (ev) => { ev.preventDefault(); action(false); el.dataset.down = '0'; });
+    el.addEventListener('touchcancel', (ev) => { ev.preventDefault(); action(false); el.dataset.down = '0'; });
   }
+
   setupBtn('leftBtn', v => keys.left = v);
   setupBtn('rightBtn', v => keys.right = v);
+
   const jumpBtn = document.getElementById('jumpBtn');
   if (jumpBtn) {
-    jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } });
-    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } }, {passive:false});
+    // make jump robust while other buttons are held by also using pointer capture
+    jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (gameOver) return;
+      try { jumpBtn.setPointerCapture(e.pointerId); } catch (err) {}
+      if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; }
+      jumpBtn.dataset.down = '1';
+    });
+    jumpBtn.addEventListener('pointerup', (e) => { e.preventDefault(); try { jumpBtn.releasePointerCapture(e.pointerId); } catch (err) {} jumpBtn.dataset.down = '0'; });
+    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } jumpBtn.dataset.down = '1'; }, {passive:false});
+    jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); jumpBtn.dataset.down = '0'; });
+    jumpBtn.addEventListener('pointercancel', (e) => { e.preventDefault(); jumpBtn.dataset.down = '0'; });
   }
 
   let camX = 0;
@@ -155,6 +188,12 @@
     // save old position for platform collision checks
     const oldY = player.y;
     const oldBottom = player.y + player.h;
+
+    // Fallback: if pointer dataset says a button is still down, keep its key true
+    const leftBtnEl = document.getElementById('leftBtn');
+    const rightBtnEl = document.getElementById('rightBtn');
+    if (leftBtnEl && leftBtnEl.dataset.down === '1') keys.left = true;
+    if (rightBtnEl && rightBtnEl.dataset.down === '1') keys.right = true;
 
     // horizontal control
     let ax = 0; if (keys.left) ax -= 1; if (keys.right) ax += 1; player.vx = ax * moveSpeed;
