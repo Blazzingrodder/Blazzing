@@ -3,6 +3,12 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
+  // make the canvas focusable so keyboard input works reliably (Space, arrows, etc.)
+  try { canvas.tabIndex = 0; canvas.style.outline = 'none'; } catch (e) {}
+  canvas.addEventListener('click', () => { try { canvas.focus(); } catch (e) {} });
+  // try to focus once shortly after load so keyboard works without an extra click in many browsers
+  setTimeout(() => { try { canvas.focus(); } catch (e) {} }, 400);
+
   let DPR = window.devicePixelRatio || 1;
   function resize() {
     DPR = window.devicePixelRatio || 1;
@@ -74,15 +80,27 @@
   // keyboard
   window.addEventListener('keydown', e => {
     if (gameOver) return;
-    if (e.key === 'ArrowLeft') keys.left = true;
-    if (e.key === 'ArrowRight') keys.right = true;
-    // support Up arrow AND Space for jump (Spacebar keycode: 'Space' or key === ' ')
-    if (e.key === 'ArrowUp' || e.code === 'Space' || e.key === ' ') {
-      if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; }
+    const k = e.key;
+    const c = e.code;
+    // left/right support by key or code for broader browser compatibility
+    if (k === 'ArrowLeft' || c === 'ArrowLeft' || c === 'KeyA' || k === 'a' || k === 'A') keys.left = true;
+    if (k === 'ArrowRight' || c === 'ArrowRight' || c === 'KeyD' || k === 'd' || k === 'D') keys.right = true;
+
+    // Jump: accept ArrowUp, Space, W, or Z (common platformer keys). Prevent default early to stop page scrolling.
+    const isJump = (k === 'ArrowUp' || c === 'ArrowUp' || c === 'Space' || k === ' ' || k === 'Spacebar' || c === 'KeyW' || k === 'w' || k === 'W' || c === 'KeyZ' || k === 'z' || k === 'Z');
+    if (isJump) {
       e.preventDefault();
+      if (player.onGround) {
+        player.vy = jumpSpeed;
+        player.onGround = false;
+      }
     }
   });
-  window.addEventListener('keyup', e => { if (e.key === 'ArrowLeft') keys.left = false; if (e.key === 'ArrowRight') keys.right = false; });
+  window.addEventListener('keyup', e => {
+    const k = e.key; const c = e.code;
+    if (k === 'ArrowLeft' || c === 'ArrowLeft' || c === 'KeyA' || k === 'a' || k === 'A') keys.left = false;
+    if (k === 'ArrowRight' || c === 'ArrowRight' || c === 'KeyD' || k === 'd' || k === 'D') keys.right = false;
+  });
 
   // touch / pointer controls
   function setupBtn(id, action) {
