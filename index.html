@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Blazzing - Playable Demo</title>
-  <link rel="stylesheet" href="style.css">
+  <!-- Added cache-busting query string so browsers fetch the latest files -->
+  <link rel="stylesheet" href="style.css?v=20260816T204850">
 </head>
 <body>
   <div id="game-wrap">
@@ -17,9 +18,9 @@
       <button id="jumpBtn" class="ctl jump">▲</button>
     </div>
 
-    <div id="info">Use left/right arrows or touch buttons. Press Up arrow to jump.</div>
+    <div id="info">Use left/right arrows or touch buttons. Press Up arrow or Space to jump.</div>
   </div>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=20260816T204850"></script>
 </body>
 </html>
