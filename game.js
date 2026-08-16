@@ -38,7 +38,8 @@
     vy: 0,
     color: '#2ecc71', // shirt color (green)
     skin: '#ffd9b3',
-    onGround: false
+    onGround: false,
+    onPlatformIndex: null // index of platform player is standing on (or null)
   };
 
   // spike (obstacle)
@@ -71,6 +72,24 @@
   // store the original lava level so we can reset on death
   let initialLavaLevel = null;
 
+  // zombies (enemies)
+  const zombies = [];
+  const initialZombies = [];
+  function buildZombies() {
+    zombies.length = 0;
+    // spawn several zombies at spaced positions along the ground
+    const positions = [600, 1100, 1700, 2400, 3100, 3800];
+    for (let i = 0; i < positions.length; i++) {
+      const x = positions[i];
+      const z = { x, w: 36, h: 48, speed: 60 + Math.random()*80, color: '#00cc44', vx: 0 };
+      zombies.push(z);
+    }
+    // snapshot
+    initialZombies.length = 0;
+    for (let z of zombies) initialZombies.push(Object.assign({}, z));
+  }
+  buildZombies();
+
   const gravity = 1700;
   const moveSpeed = 320;
   const jumpSpeed = -620;
@@ -89,9 +108,13 @@
     // replace current platform properties with the initial ones
     platforms.length = 0;
     for (let p of initialPlatforms) {
-      // if resetMoving is true we set moving=false so we can start them after a delay
       platforms.push({ x: p.x, w: p.w, h: p.h, moving: (resetMoving ? false : p.moving), offset: p.offset, vy: p.vy });
     }
+  }
+
+  function restoreZombiesToOriginal() {
+    zombies.length = 0;
+    for (let z of initialZombies) zombies.push(Object.assign({}, z));
   }
 
   function initPositions() {
@@ -101,15 +124,17 @@
     player.vx = 0;
     player.vy = 0;
     player.onGround = true;
+    player.onPlatformIndex = null;
     // ensure lava initialized relative to ground (if not yet)
     if (lava.level === null) lava.level = groundY() + 220; // starts 220px below ground
     // capture initial lava level the first time
     if (initialLavaLevel === null) initialLavaLevel = lava.level;
+    // restore zombies
+    restoreZombiesToOriginal();
   }
   initPositions();
 
   // After the initial positions are set and lava.level captured, ensure platforms are in original state
-  // but don't schedule movement yet; movement scheduling happens on respawn
   restorePlatformsSetToOriginal(true);
 
   // schedule the 5th-closest platform to rise 3s after a respawn, then stagger the rest
@@ -128,7 +153,6 @@
       const t = setTimeout(() => {
         // start moving this platform upward
         platforms[pid].moving = true;
-        // ensure it has a speed
         platforms[pid].vy = platforms[pid].vy || (40 + Math.random() * 40);
       }, initialDelay + idx * stagger);
       platformStartTimeouts.push(t);
@@ -141,6 +165,8 @@
     // reset lava
     if (initialLavaLevel !== null) lava.level = initialLavaLevel;
     else lava.level = groundY() + 220;
+    // restore zombies
+    restoreZombiesToOriginal();
     // clear scheduled starts
     clearScheduledStarts();
     // reset camera
@@ -154,7 +180,7 @@
     if (k === 'ArrowLeft' || c === 'ArrowLeft' || c === 'KeyA' || k === 'a' || k === 'A') keys.left = true;
     if (k === 'ArrowRight' || c === 'ArrowRight' || c === 'KeyD' || k === 'd' || k === 'D') keys.right = true;
     const isJump = (k === 'ArrowUp' || c === 'ArrowUp' || c === 'Space' || k === ' ' || k === 'Spacebar' || c === 'KeyW' || k === 'w' || k === 'W' || c === 'KeyZ' || k === 'z' || k === 'Z');
-    if (isJump) { e.preventDefault(); if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } }
+    if (isJump) { e.preventDefault(); if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; player.onPlatformIndex = null; } }
   });
   window.addEventListener('keyup', e => {
     const k = e.key; const c = e.code;
@@ -177,9 +203,9 @@
   setupBtn('rightBtn', v => keys.right = v);
   const jumpBtn = document.getElementById('jumpBtn');
   if (jumpBtn) {
-    jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (gameOver) return; try { jumpBtn.setPointerCapture(e.pointerId); } catch (err) {} if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } jumpBtn.dataset.down = '1'; });
+    jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (gameOver) return; try { jumpBtn.setPointerCapture(e.pointerId); } catch (err) {} if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; player.onPlatformIndex = null; } jumpBtn.dataset.down = '1'; });
     jumpBtn.addEventListener('pointerup', (e) => { e.preventDefault(); try { jumpBtn.releasePointerCapture(e.pointerId); } catch (err) {} jumpBtn.dataset.down = '0'; });
-    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } jumpBtn.dataset.down = '1'; }, {passive:false});
+    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; player.onPlatformIndex = null; } jumpBtn.dataset.down = '1'; }, {passive:false});
     jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); jumpBtn.dataset.down = '0'; });
     jumpBtn.addEventListener('pointercancel', (e) => { e.preventDefault(); jumpBtn.dataset.down = '0'; });
   }
@@ -215,6 +241,10 @@
     return false;
   }
 
+  function rectsIntersect(a, b) {
+    return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
+  }
+
   function update(dt) {
     start.y = groundY() - player.h;
     if (lava.level === null) lava.level = groundY() + 220; // init lava if needed
@@ -246,12 +276,23 @@
     const gY = groundY();
     for (let p of platforms) {
       if (p.moving) {
-        p.offset -= p.vy * dt;
+        const prevOffset = p.offset || 0;
+        p.offset = (p.offset || 0) - p.vy * dt;
+        const delta = p.offset - prevOffset; // negative when moving up
         const pTop = gY - p.h + p.offset;
         // if platform moved too high above ground, send it back below ground
         if (pTop + p.h < gY - 360) {
           p.offset = 200 + Math.random() * 220; // drop back below ground to rise again
           p.vy = 40 + Math.random() * 40; // vary speed
+        }
+        // if player is standing on this platform, move the player along with it
+        if (player.onPlatformIndex !== null) {
+          const pi = player.onPlatformIndex;
+          if (platforms[pi] === p) {
+            // move player by the same offset change
+            player.y += delta; // delta is negative for upward movement
+            player.vy = 0; // lock vertical velocity while on platform
+          }
         }
       }
     }
@@ -266,7 +307,8 @@
     // platform collision (respecting moving platforms' offset)
     let landed = false;
     if (player.vy > 0) {
-      for (let p of platforms) {
+      for (let i = 0; i < platforms.length; i++) {
+        const p = platforms[i];
         const pTop = gY - p.h + (p.offset || 0);
         const pLeft = p.x - p.w/2;
         const pRight = p.x + p.w/2;
@@ -278,6 +320,7 @@
             player.y = pTop - player.h;
             player.vy = 0;
             player.onGround = true;
+            player.onPlatformIndex = i; // remember which platform we stand on
             landed = true;
             break;
           }
@@ -291,23 +334,44 @@
         player.y = gY - player.h;
         player.vy = 0;
         player.onGround = true;
+        player.onPlatformIndex = null;
       } else {
         player.onGround = false;
+        // if we are not standing on anything, clear platform index
+        player.onPlatformIndex = null;
       }
     }
 
     // spike collision
     if (checkSpikeCollision()) {
+      // reset world immediately on death
+      fullResetToOriginal();
       gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
     }
 
     // lava rising
     lava.level -= lava.riseSpeed * dt; // move lava up (smaller y)
 
-    // if player is in lava -> game over
+    // if player is in lava -> game over (reset world immediately)
     const playerBottom = player.y + player.h;
     if (playerBottom > lava.level) {
+      fullResetToOriginal();
       gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
+    }
+
+    // zombies: move toward player on ground and check collisions
+    for (let z of zombies) {
+      // keep zombies on ground
+      z.y = groundY() - z.h;
+      if (z.x < player.x - 6) z.vx = z.speed; else if (z.x > player.x + 6) z.vx = -z.speed; else z.vx = 0;
+      z.x += z.vx * dt;
+      // simple collision box between player and zombie
+      const zbox = { x: z.x - z.w/2, y: z.y, w: z.w, h: z.h };
+      const pbox = { x: player.x - player.w/2, y: player.y, w: player.w, h: player.h };
+      if (rectsIntersect(zbox, pbox)) {
+        fullResetToOriginal();
+        gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
+      }
     }
 
     // keep player in bounds
@@ -346,17 +410,24 @@
     // platforms
     for (let i = 0; i < platforms.length; i++) {
       const p = platforms[i]; const px = p.x - p.w/2; const py = gY - p.h + (p.offset || 0);
-      ctx.fillStyle = i % 2 ? '#47506a' : '#3b3f58'; ctx.fillRect(px, py, p.w, p.h);
+      // draw moving platforms slightly brighter
+      ctx.fillStyle = p.moving ? '#5b6580' : (i % 2 ? '#47506a' : '#3b3f58'); ctx.fillRect(px, py, p.w, p.h);
     }
     // spike
     ctx.fillStyle = spike.color; const sx = spike.x; const sw = spike.w; const sh = spike.h; ctx.beginPath(); ctx.moveTo(sx - sw/2, gY); ctx.lineTo(sx, gY - sh); ctx.lineTo(sx + sw/2, gY); ctx.closePath(); ctx.fill();
+    // zombies (draw on world)
+    for (let z of zombies) {
+      const zx = z.x; const zy = groundY() - z.h; ctx.fillStyle = '#00cc44'; ctx.fillRect(zx - z.w/2, zy, z.w, z.h);
+      // simple eyes
+      ctx.fillStyle = '#003300'; ctx.fillRect(zx - 8, zy + 8, 4, 4); ctx.fillRect(zx + 4, zy + 8, 4, 4);
+    }
     // lava (drawn on top so it can submerge platforms)
     const lavaTop = lava.level; const lavaBottom = h; const grad = ctx.createLinearGradient(0, lavaTop, 0, lavaBottom); grad.addColorStop(0, lava.colorTop); grad.addColorStop(1, lava.colorBottom); ctx.fillStyle = grad; ctx.fillRect(camX, lavaTop, w, lavaBottom - lavaTop);
     // player shadow & sprite
     const px = player.x; const py = player.y; ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(px, gY + 6, player.w, 6, 0, 0, Math.PI*2); ctx.fill(); drawStickman(px, py);
     ctx.restore();
     // HUD
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,420,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up/Space/W to jump • Lava rises!', 14, 32);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,520,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up/Space/W to jump • Lava rises! • Zombies chase you', 14, 32);
     // Game Over overlay
     if (gameOver) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,w,h); ctx.fillStyle = '#ffdddd'; ctx.font = '48px system-ui, -apple-system'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', w/2, h/2 - 10); ctx.font = '20px system-ui, -apple-system'; ctx.fillStyle = '#fff'; const sec = Math.max(0, Math.ceil(gameOverTimer)); ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30); ctx.textAlign = 'start'; }
   }
