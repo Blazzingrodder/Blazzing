@@ -1,12 +1,11 @@
-// game.js - simple platformer with left/right and Up-arrow jump + touch buttons
+// game.js - simple platformer with left/right and jump + touch buttons
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
 
-  // make the canvas focusable so keyboard input works reliably (Space, arrows, etc.)
+  // make the canvas focusable so keyboard input works reliably
   try { canvas.tabIndex = 0; canvas.style.outline = 'none'; } catch (e) {}
   canvas.addEventListener('click', () => { try { canvas.focus(); } catch (e) {} });
-  // try to focus once shortly after load so keyboard works without an extra click in many browsers
   setTimeout(() => { try { canvas.focus(); } catch (e) {} }, 400);
 
   let DPR = window.devicePixelRatio || 1;
@@ -42,23 +41,29 @@
     onGround: false
   };
 
-  // spike (obstacle) - bigger and close to start
-  const spike = {
-    x: 300,
-    w: 200,
-    h: 90,
-    color: '#ff4d4d'
-  };
+  // spike (obstacle)
+  const spike = { x: 300, w: 200, h: 90, color: '#ff4d4d' };
 
-  // platforms (the rectangles you want to be solid)
+  // platforms (logical) - some will be moving upward
   const platforms = [];
   (function buildPlatforms() {
     for (let i = 0; i < 40; i++) {
       const px = 200 + i * 140;
       const ph = (i % 3 ? 20 : 60);
-      platforms.push({ x: px, w: 100, h: ph });
+      // make every 5th platform a moving one for variety
+      const moving = (i % 5 === 0) && i > 2;
+      platforms.push({ x: px, w: 100, h: ph, moving: moving, offset: moving ? 200 + Math.random()*200 : 0, vy: moving ? (40 + Math.random()*40) : 0 });
     }
   })();
+
+  // lava: starts below ground and rises over time
+  const lava = {
+    // will be initialized relative to ground on first update
+    level: null,    // y coordinate (CSS pixels) of the lava top
+    riseSpeed: 8,   // pixels per second (increase to make it faster)
+    colorTop: '#ff6b6b',
+    colorBottom: '#cc2c2c'
+  };
 
   const gravity = 1700;
   const moveSpeed = 320;
@@ -74,27 +79,19 @@
     player.vx = 0;
     player.vy = 0;
     player.onGround = true;
+    // ensure lava initialized relative to ground (if not yet)
+    if (lava.level === null) lava.level = groundY() + 220; // starts 220px below ground
   }
   initPositions();
 
   // keyboard
   window.addEventListener('keydown', e => {
     if (gameOver) return;
-    const k = e.key;
-    const c = e.code;
-    // left/right support by key or code for broader browser compatibility
+    const k = e.key; const c = e.code;
     if (k === 'ArrowLeft' || c === 'ArrowLeft' || c === 'KeyA' || k === 'a' || k === 'A') keys.left = true;
     if (k === 'ArrowRight' || c === 'ArrowRight' || c === 'KeyD' || k === 'd' || k === 'D') keys.right = true;
-
-    // Jump: accept ArrowUp, Space, W, or Z (common platformer keys). Prevent default early to stop page scrolling.
     const isJump = (k === 'ArrowUp' || c === 'ArrowUp' || c === 'Space' || k === ' ' || k === 'Spacebar' || c === 'KeyW' || k === 'w' || k === 'W' || c === 'KeyZ' || k === 'z' || k === 'Z');
-    if (isJump) {
-      e.preventDefault();
-      if (player.onGround) {
-        player.vy = jumpSpeed;
-        player.onGround = false;
-      }
-    }
+    if (isJump) { e.preventDefault(); if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } }
   });
   window.addEventListener('keyup', e => {
     const k = e.key; const c = e.code;
@@ -102,52 +99,22 @@
     if (k === 'ArrowRight' || c === 'ArrowRight' || c === 'KeyD' || k === 'd' || k === 'D') keys.right = false;
   });
 
-  // touch / pointer controls
+  // touch / pointer controls (pointer capture + dataset fallback)
   function setupBtn(id, action) {
     const el = document.getElementById(id);
     if (!el) return;
-
-    // Use Pointer Events with pointer capture so holding one control isn't cancelled when touching another
-    el.addEventListener('pointerdown', (ev) => {
-      ev.preventDefault();
-      if (gameOver) return;
-      try { el.setPointerCapture(ev.pointerId); } catch (e) {}
-      action(true);
-      el.dataset.down = '1';
-    });
-
-    el.addEventListener('pointerup', (ev) => {
-      ev.preventDefault();
-      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
-      action(false);
-      el.dataset.down = '0';
-    });
-
-    el.addEventListener('pointercancel', (ev) => {
-      ev.preventDefault();
-      action(false);
-      el.dataset.down = '0';
-    });
-
-    // touch fallbacks for older browsers (kept for compatibility)
+    el.addEventListener('pointerdown', (ev) => { ev.preventDefault(); if (gameOver) return; try { el.setPointerCapture(ev.pointerId); } catch (e) {} action(true); el.dataset.down = '1'; });
+    el.addEventListener('pointerup', (ev) => { ev.preventDefault(); try { el.releasePointerCapture(ev.pointerId); } catch (e) {} action(false); el.dataset.down = '0'; });
+    el.addEventListener('pointercancel', (ev) => { ev.preventDefault(); action(false); el.dataset.down = '0'; });
     el.addEventListener('touchstart', (ev) => { ev.preventDefault(); if (gameOver) return; action(true); el.dataset.down = '1'; }, {passive:false});
     el.addEventListener('touchend', (ev) => { ev.preventDefault(); action(false); el.dataset.down = '0'; });
     el.addEventListener('touchcancel', (ev) => { ev.preventDefault(); action(false); el.dataset.down = '0'; });
   }
-
   setupBtn('leftBtn', v => keys.left = v);
   setupBtn('rightBtn', v => keys.right = v);
-
   const jumpBtn = document.getElementById('jumpBtn');
   if (jumpBtn) {
-    // make jump robust while other buttons are held by also using pointer capture
-    jumpBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      if (gameOver) return;
-      try { jumpBtn.setPointerCapture(e.pointerId); } catch (err) {}
-      if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; }
-      jumpBtn.dataset.down = '1';
-    });
+    jumpBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (gameOver) return; try { jumpBtn.setPointerCapture(e.pointerId); } catch (err) {} if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } jumpBtn.dataset.down = '1'; });
     jumpBtn.addEventListener('pointerup', (e) => { e.preventDefault(); try { jumpBtn.releasePointerCapture(e.pointerId); } catch (err) {} jumpBtn.dataset.down = '0'; });
     jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameOver) return; if (player.onGround) { player.vy = jumpSpeed; player.onGround = false; } jumpBtn.dataset.down = '1'; }, {passive:false});
     jumpBtn.addEventListener('touchend', (e) => { e.preventDefault(); jumpBtn.dataset.down = '0'; });
@@ -164,7 +131,7 @@
     requestAnimationFrame(loop);
   }
 
-  // triangle-aware collision test: sample across player's width and compare feet to spike triangular surface
+  // triangle-aware spike collision
   function checkSpikeCollision() {
     const gY = groundY();
     const spikeLeft = spike.x - spike.w/2;
@@ -172,20 +139,14 @@
     const playerLeft = player.x - player.w/2;
     const playerRight = player.x + player.w/2;
     const playerBottom = player.y + player.h;
-
-    // quick reject if no horizontal overlap at all
     if (playerRight < spikeLeft || playerLeft > spikeRight) return false;
-
     const half = spike.w / 2;
-    // sample three X positions across player's width (left, center, right)
     const sampleXs = [playerLeft, player.x, playerRight];
     for (let sx of sampleXs) {
       if (sx < spikeLeft || sx > spikeRight) continue;
       const dx = Math.abs(sx - spike.x);
-      // linear triangular profile: height decreases linearly from center to edges
       const localHeight = spike.h * Math.max(0, 1 - (dx / half));
       const spikeSurfaceY = gY - localHeight;
-      // collision only if player's feet go below the triangular surface at this x
       if (playerBottom > spikeSurfaceY) return true;
     }
     return false;
@@ -193,49 +154,62 @@
 
   function update(dt) {
     start.y = groundY() - player.h;
+    if (lava.level === null) lava.level = groundY() + 220; // init lava if needed
+
     if (gameOver) {
       gameOverTimer -= dt;
       if (gameOverTimer <= 0) {
         initPositions();
-        gameOver = false;        // stop the game-over state
-        gameOverTimer = 0;      // clamp to zero
+        gameOver = false; gameOverTimer = 0;
       }
       return;
     }
 
-    // save old position for platform collision checks
+    // save old position for platform checks
     const oldY = player.y;
     const oldBottom = player.y + player.h;
 
-    // Fallback: if pointer dataset says a button is still down, keep its key true
+    // Fallback: if pointer dataset says button still down, keep key true
     const leftBtnEl = document.getElementById('leftBtn');
     const rightBtnEl = document.getElementById('rightBtn');
     if (leftBtnEl && leftBtnEl.dataset.down === '1') keys.left = true;
     if (rightBtnEl && rightBtnEl.dataset.down === '1') keys.right = true;
 
+    // move platforms upward (and loop them)
+    const gY = groundY();
+    for (let p of platforms) {
+      if (p.moving) {
+        // offset is positive when below ground; decreasing moves it up
+        p.offset -= p.vy * dt;
+        const pTop = gY - p.h + p.offset;
+        // if platform moved too high above ground, send it back below ground
+        if (pTop + p.h < gY - 360) {
+          p.offset = 200 + Math.random() * 220; // drop back below ground to rise again
+          p.vy = 40 + Math.random() * 40; // vary speed
+        }
+      }
+    }
+
     // horizontal control
     let ax = 0; if (keys.left) ax -= 1; if (keys.right) ax += 1; player.vx = ax * moveSpeed;
-
     // gravity and integrate
     player.vy += gravity * dt;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 
-    const gY = groundY();
-
-    // platform collision: only if falling (player.vy > 0)
+    // platform collision (respecting moving platforms' offset)
     let landed = false;
     if (player.vy > 0) {
       for (let p of platforms) {
-        const pTop = gY - p.h;
+        const pTop = gY - p.h + (p.offset || 0);
         const pLeft = p.x - p.w/2;
         const pRight = p.x + p.w/2;
         const newBottom = player.y + player.h;
-        // horizontal overlap
         if (player.x + player.w/2 > pLeft && player.x - player.w/2 < pRight) {
-          // crossed downward through the platform top this frame?
+          // only land if we crossed downward through top this frame and platform top is above lava
           if (oldBottom <= pTop && newBottom > pTop) {
-            // land on platform
+            // don't land if platform is submerged under lava surface
+            if (pTop >= lava.level) continue;
             player.y = pTop - player.h;
             player.vy = 0;
             player.onGround = true;
@@ -246,7 +220,7 @@
       }
     }
 
-    // ground collision if not landed on a platform
+    // ground collision if not on a platform
     if (!landed) {
       if (player.y + player.h > gY) {
         player.y = gY - player.h;
@@ -257,154 +231,69 @@
       }
     }
 
-    // spike collision -> trigger game over
+    // spike collision
     if (checkSpikeCollision()) {
-      gameOver = true;
-      gameOverTimer = 5.0; // seconds of game over
-      player.vx = 0;
-      player.vy = 0;
-      return;
+      gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
     }
 
-    // keep player in bounds horizontally
-    if (player.x < 20) player.x = 20;
-    if (player.x > 5000) player.x = 5000; // big level width
+    // lava rising
+    lava.level -= lava.riseSpeed * dt; // move lava up (smaller y)
 
-    // camera follows player
-    const canvasW = canvas.width / DPR;
-    camX = player.x - canvasW / 2;
-    if (camX < 0) camX = 0;
+    // if player is in lava -> game over
+    const playerBottom = player.y + player.h;
+    if (playerBottom > lava.level) {
+      gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
+    }
+
+    // keep player in bounds
+    if (player.x < 20) player.x = 20;
+    if (player.x > 5000) player.x = 5000;
+
+    // camera
+    const canvasW = canvas.width / DPR; camX = player.x - canvasW / 2; if (camX < 0) camX = 0;
   }
 
   function drawStickman(x, y) {
-    // x is center x, y is top of torso
-    const cx = x;
-    const top = y;
-    const bodyWidth = player.w; // 36
-    const bodyHeight = player.h - 8; // leave a little space for head
-    const headR = Math.min(12, bodyWidth/2);
-    const headCX = cx;
-    const headCY = top - headR;
-
-    const torsoTop = top;
-    const torsoBottom = top + bodyHeight;
-    const shoulderY = torsoTop + 6;
-    const waistY = torsoTop + Math.round(bodyHeight * 0.5);
-
+    const cx = x; const top = y; const bodyWidth = player.w; const bodyHeight = player.h - 8; const headR = Math.min(12, bodyWidth/2);
+    const headCX = cx; const headCY = top - headR; const torsoTop = top; const torsoBottom = top + bodyHeight; const shoulderY = torsoTop + 6; const waistY = torsoTop + Math.round(bodyHeight * 0.5);
     // head
-    ctx.fillStyle = player.skin;
-    ctx.beginPath();
-    ctx.arc(headCX, headCY, headR, 0, Math.PI * 2);
-    ctx.fill();
-
+    ctx.fillStyle = player.skin; ctx.beginPath(); ctx.arc(headCX, headCY, headR, 0, Math.PI * 2); ctx.fill();
     // shirt
-    ctx.fillStyle = player.color;
-    ctx.fillRect(cx - bodyWidth/2, torsoTop, bodyWidth, Math.round(bodyHeight * 0.5));
-
+    ctx.fillStyle = player.color; ctx.fillRect(cx - bodyWidth/2, torsoTop, bodyWidth, Math.round(bodyHeight * 0.5));
     // pants
-    ctx.fillStyle = '#44475a';
-    ctx.fillRect(cx - bodyWidth/2, torsoTop + Math.round(bodyHeight * 0.5), bodyWidth, Math.round(bodyHeight * 0.5));
-
+    ctx.fillStyle = '#44475a'; ctx.fillRect(cx - bodyWidth/2, torsoTop + Math.round(bodyHeight * 0.5), bodyWidth, Math.round(bodyHeight * 0.5));
     // arms
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - bodyWidth/2 + 4, shoulderY);
-    ctx.lineTo(cx - bodyWidth/2 - 14, shoulderY + 18);
-    ctx.moveTo(cx + bodyWidth/2 - 4, shoulderY);
-    ctx.lineTo(cx + bodyWidth/2 + 14, shoulderY + 18);
-    ctx.stroke();
-
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - bodyWidth/2 + 4, shoulderY); ctx.lineTo(cx - bodyWidth/2 - 14, shoulderY + 18); ctx.moveTo(cx + bodyWidth/2 - 4, shoulderY); ctx.lineTo(cx + bodyWidth/2 + 14, shoulderY + 18); ctx.stroke();
     // legs
-    ctx.beginPath();
-    ctx.moveTo(cx - 8, waistY);
-    ctx.lineTo(cx - 12, torsoBottom + 20);
-    ctx.moveTo(cx + 8, waistY);
-    ctx.lineTo(cx + 12, torsoBottom + 20);
-    ctx.stroke();
-
+    ctx.beginPath(); ctx.moveTo(cx - 8, waistY); ctx.lineTo(cx - 12, torsoBottom + 20); ctx.moveTo(cx + 8, waistY); ctx.lineTo(cx + 12, torsoBottom + 20); ctx.stroke();
     // eyes
-    ctx.fillStyle = '#333';
-    ctx.beginPath();
-    ctx.arc(headCX - 4, headCY - 2, 1.6, 0, Math.PI * 2);
-    ctx.arc(headCX + 4, headCY - 2, 1.6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(headCX - 4, headCY - 2, 1.6, 0, Math.PI * 2); ctx.arc(headCX + 4, headCY - 2, 1.6, 0, Math.PI * 2); ctx.fill();
   }
 
   function render() {
-    const w = canvas.width / DPR;
-    const h = canvas.height / DPR;
-    ctx.clearRect(0,0,w,h);
-
-    // background
-    ctx.fillStyle = '#7ec8ff';
-    ctx.fillRect(0,0,w,h);
-
-    // draw level translated by camera
-    const gY = groundY();
-    ctx.save();
-    ctx.translate(-camX,0);
-
+    const w = canvas.width / DPR; const h = canvas.height / DPR; ctx.clearRect(0,0,w,h);
+    // sky
+    ctx.fillStyle = '#7ec8ff'; ctx.fillRect(0,0,w,h);
+    // draw world translated by camera
+    const gY = groundY(); ctx.save(); ctx.translate(-camX,0);
     // ground
-    ctx.fillStyle = '#2b2b3f';
-    ctx.fillRect(0, gY, 6000, h - gY);
-
-    // decorative rectangles & platforms
+    ctx.fillStyle = '#2b2b3f'; ctx.fillRect(0, gY, 6000, h - gY);
+    // platforms
     for (let i = 0; i < platforms.length; i++) {
-      const p = platforms[i];
-      const px = p.x - p.w/2;
-      const py = gY - p.h;
-      ctx.fillStyle = i % 2 ? '#47506a' : '#3b3f58';
-      ctx.fillRect(px, py, p.w, p.h);
+      const p = platforms[i]; const px = p.x - p.w/2; const py = gY - p.h + (p.offset || 0);
+      ctx.fillStyle = i % 2 ? '#47506a' : '#3b3f58'; ctx.fillRect(px, py, p.w, p.h);
     }
-
     // spike
-    ctx.fillStyle = spike.color;
-    const sx = spike.x;
-    const sw = spike.w;
-    const sh = spike.h;
-    ctx.beginPath();
-    ctx.moveTo(sx - sw/2, gY);
-    ctx.lineTo(sx, gY - sh);
-    ctx.lineTo(sx + sw/2, gY);
-    ctx.closePath();
-    ctx.fill();
-
-    // player as stickman
-    const px = player.x;
-    const py = player.y;
-    // shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(px, gY + 6, player.w, 6, 0, 0, Math.PI*2);
-    ctx.fill();
-
-    drawStickman(px, py);
-
+    ctx.fillStyle = spike.color; const sx = spike.x; const sw = spike.w; const sh = spike.h; ctx.beginPath(); ctx.moveTo(sx - sw/2, gY); ctx.lineTo(sx, gY - sh); ctx.lineTo(sx + sw/2, gY); ctx.closePath(); ctx.fill();
+    // lava (drawn on top so it can submerge platforms)
+    const lavaTop = lava.level; const lavaBottom = h; const grad = ctx.createLinearGradient(0, lavaTop, 0, lavaBottom); grad.addColorStop(0, lava.colorTop); grad.addColorStop(1, lava.colorBottom); ctx.fillStyle = grad; ctx.fillRect(camX, lavaTop, w, lavaBottom - lavaTop);
+    // player shadow & sprite
+    const px = player.x; const py = player.y; ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(px, gY + 6, player.w, 6, 0, 0, Math.PI*2); ctx.fill(); drawStickman(px, py);
     ctx.restore();
-
     // HUD
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(8,8,340,36);
-    ctx.fillStyle = '#fff';
-    ctx.font = '14px system-ui, -apple-system';
-    ctx.fillText('← / → or touch • Up arrow to jump', 14, 32);
-
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,340,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up/Space/W to jump • Lava rises!', 14, 32);
     // Game Over overlay
-    if (gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(0,0,w,h);
-      ctx.fillStyle = '#ffdddd';
-      ctx.font = '48px system-ui, -apple-system';
-      ctx.textAlign = 'center';
-      ctx.fillText('GAME OVER', w/2, h/2 - 10);
-      ctx.font = '20px system-ui, -apple-system';
-      ctx.fillStyle = '#fff';
-      const sec = Math.max(0, Math.ceil(gameOverTimer));
-      ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30);
-      ctx.textAlign = 'start';
-    }
+    if (gameOver) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,w,h); ctx.fillStyle = '#ffdddd'; ctx.font = '48px system-ui, -apple-system'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', w/2, h/2 - 10); ctx.font = '20px system-ui, -apple-system'; ctx.fillStyle = '#fff'; const sec = Math.max(0, Math.ceil(gameOverTimer)); ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30); ctx.textAlign = 'start'; }
   }
 
   requestAnimationFrame(loop);
