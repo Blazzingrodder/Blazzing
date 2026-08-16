@@ -274,7 +274,9 @@
 
     // move platforms upward (and loop them) only when not in gameOver
     const gY = groundY();
-    for (let p of platforms) {
+    let ridingPlatform = false;
+    for (let i = 0; i < platforms.length; i++) {
+      const p = platforms[i];
       if (p.moving) {
         const prevOffset = p.offset || 0;
         p.offset = (p.offset || 0) - p.vy * dt;
@@ -286,21 +288,19 @@
           p.vy = 40 + Math.random() * 40; // vary speed
         }
         // if player is standing on this platform, move the player along with it
-        if (player.onPlatformIndex !== null) {
-          const pi = player.onPlatformIndex;
-          if (platforms[pi] === p) {
-            // move player by the same offset change
-            player.y += delta; // delta is negative for upward movement
-            player.vy = 0; // lock vertical velocity while on platform
-          }
+        if (player.onPlatformIndex === i) {
+          // move player by the same offset change
+          player.y += delta; // delta is negative for upward movement
+          player.vy = 0; // lock vertical velocity while on platform
+          ridingPlatform = true;
         }
       }
     }
 
     // horizontal control
     let ax = 0; if (keys.left) ax -= 1; if (keys.right) ax += 1; player.vx = ax * moveSpeed;
-    // gravity and integrate
-    player.vy += gravity * dt;
+    // gravity and integrate only when not riding a platform
+    if (!ridingPlatform) player.vy += gravity * dt; else player.vy = 0;
     player.x += player.vx * dt;
     player.y += player.vy * dt;
 
@@ -338,13 +338,12 @@
       } else {
         player.onGround = false;
         // if we are not standing on anything, clear platform index
-        player.onPlatformIndex = null;
+        if (!ridingPlatform) player.onPlatformIndex = null;
       }
     }
 
     // spike collision
     if (checkSpikeCollision()) {
-      // reset world immediately on death
       fullResetToOriginal();
       gameOver = true; gameOverTimer = 5.0; player.vx = 0; player.vy = 0; return;
     }
