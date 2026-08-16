@@ -56,6 +56,9 @@
     }
   })();
 
+  // preserve the original platform states so we can restore them when the player respawns
+  const initialPlatforms = platforms.map(p => ({ x: p.x, w: p.w, h: p.h, moving: p.moving, offset: p.offset, vy: p.vy }));
+
   // lava: starts below ground and rises over time
   const lava = {
     // will be initialized relative to ground on first update
@@ -65,12 +68,31 @@
     colorBottom: '#cc2c2c'
   };
 
+  // store the original lava level so we can reset on death
+  let initialLavaLevel = null;
+
   const gravity = 1700;
   const moveSpeed = 320;
   const jumpSpeed = -620;
 
   const keys = { left:false, right:false };
   let gameOver = false, gameOverTimer = 0;
+
+  // scheduled timeouts used to stagger platform starts; cleared on respawn
+  let platformStartTimeouts = [];
+  function clearScheduledStarts() {
+    for (let t of platformStartTimeouts) clearTimeout(t);
+    platformStartTimeouts = [];
+  }
+
+  function restorePlatformsSetToOriginal(resetMoving = true) {
+    // replace current platform properties with the initial ones
+    platforms.length = 0;
+    for (let p of initialPlatforms) {
+      // if resetMoving is true we set moving=false so we can start them after a delay
+      platforms.push({ x: p.x, w: p.w, h: p.h, moving: (resetMoving ? false : p.moving), offset: p.offset, vy: p.vy });
+    }
+  }
 
   function initPositions() {
     start.y = groundY() - player.h;
@@ -81,8 +103,49 @@
     player.onGround = true;
     // ensure lava initialized relative to ground (if not yet)
     if (lava.level === null) lava.level = groundY() + 220; // starts 220px below ground
+    // capture initial lava level the first time
+    if (initialLavaLevel === null) initialLavaLevel = lava.level;
   }
   initPositions();
+
+  // After the initial positions are set and lava.level captured, ensure platforms are in original state
+  // but don't schedule movement yet; movement scheduling happens on respawn
+  restorePlatformsSetToOriginal(true);
+
+  // schedule the 5th-closest platform to rise 3s after a respawn, then stagger the rest
+  function schedulePlatformStarts() {
+    clearScheduledStarts();
+    // compute distances from player to each platform's x
+    const list = platforms.map((p, i) => ({ i, dist: Math.abs(p.x - player.x) }));
+    list.sort((a,b) => a.dist - b.dist);
+    const pickIndex = Math.min(4, list.length - 1); // 5th closest (index 4) or last if fewer
+    const chosenPlatformId = list[pickIndex].i;
+    const order = [chosenPlatformId].concat(list.map(x => x.i).filter(i => i !== chosenPlatformId));
+
+    const initialDelay = 3000; // 3 seconds after respawn
+    const stagger = 200; // 200ms between others
+    order.forEach((pid, idx) => {
+      const t = setTimeout(() => {
+        // start moving this platform upward
+        platforms[pid].moving = true;
+        // ensure it has a speed
+        platforms[pid].vy = platforms[pid].vy || (40 + Math.random() * 40);
+      }, initialDelay + idx * stagger);
+      platformStartTimeouts.push(t);
+    });
+  }
+
+  function fullResetToOriginal() {
+    // restore platforms positions and stop movement
+    restorePlatformsSetToOriginal(true);
+    // reset lava
+    if (initialLavaLevel !== null) lava.level = initialLavaLevel;
+    else lava.level = groundY() + 220;
+    // clear scheduled starts
+    clearScheduledStarts();
+    // reset camera
+    camX = 0;
+  }
 
   // keyboard
   window.addEventListener('keydown', e => {
@@ -159,8 +222,12 @@
     if (gameOver) {
       gameOverTimer -= dt;
       if (gameOverTimer <= 0) {
+        // Respawn: reset everything to original and schedule the platform starts
+        fullResetToOriginal();
         initPositions();
         gameOver = false; gameOverTimer = 0;
+        // after respawn, start the 5th-closest platform after 3s and then stagger the rest
+        schedulePlatformStarts();
       }
       return;
     }
@@ -175,11 +242,10 @@
     if (leftBtnEl && leftBtnEl.dataset.down === '1') keys.left = true;
     if (rightBtnEl && rightBtnEl.dataset.down === '1') keys.right = true;
 
-    // move platforms upward (and loop them)
+    // move platforms upward (and loop them) only when not in gameOver
     const gY = groundY();
     for (let p of platforms) {
       if (p.moving) {
-        // offset is positive when below ground; decreasing moves it up
         p.offset -= p.vy * dt;
         const pTop = gY - p.h + p.offset;
         // if platform moved too high above ground, send it back below ground
@@ -206,7 +272,6 @@
         const pRight = p.x + p.w/2;
         const newBottom = player.y + player.h;
         if (player.x + player.w/2 > pLeft && player.x - player.w/2 < pRight) {
-          // only land if we crossed downward through top this frame and platform top is above lava
           if (oldBottom <= pTop && newBottom > pTop) {
             // don't land if platform is submerged under lava surface
             if (pTop >= lava.level) continue;
@@ -291,7 +356,7 @@
     const px = player.x; const py = player.y; ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(px, gY + 6, player.w, 6, 0, 0, Math.PI*2); ctx.fill(); drawStickman(px, py);
     ctx.restore();
     // HUD
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,340,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up/Space/W to jump • Lava rises!', 14, 32);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(8,8,420,36); ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, -apple-system'; ctx.fillText('← / → or touch • Up/Space/W to jump • Lava rises!', 14, 32);
     // Game Over overlay
     if (gameOver) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,w,h); ctx.fillStyle = '#ffdddd'; ctx.font = '48px system-ui, -apple-system'; ctx.textAlign = 'center'; ctx.fillText('GAME OVER', w/2, h/2 - 10); ctx.font = '20px system-ui, -apple-system'; ctx.fillStyle = '#fff'; const sec = Math.max(0, Math.ceil(gameOverTimer)); ctx.fillText('Respawning in ' + sec + '...', w/2, h/2 + 30); ctx.textAlign = 'start'; }
   }
